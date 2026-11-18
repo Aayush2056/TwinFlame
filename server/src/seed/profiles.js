@@ -1,34 +1,34 @@
 const PORTRAITS = {
   maya: {
-    url: '/src/assets/images/portrait_maya_sunlit_1794983125822.jpg',
+    url: '/images/portrait_maya_sunlit_1794983125822.jpg',
     publicId: 'twinflame/profiles/portrait_maya_sunlit',
   },
   liam: {
-    url: '/src/assets/images/portrait_liam_studio_1794983126664.jpg',
+    url: '/images/portrait_liam_studio_1794983126664.jpg',
     publicId: 'twinflame/profiles/portrait_liam_studio',
   },
   chloe: {
-    url: '/src/assets/images/portrait_chloe_city_1794983128159.jpg',
+    url: '/images/portrait_chloe_city_1794983128159.jpg',
     publicId: 'twinflame/profiles/portrait_chloe_city',
   },
   marcus: {
-    url: '/src/assets/images/portrait_marcus_park_1794983128609.jpg',
+    url: '/images/portrait_marcus_park_1794983128609.jpg',
     publicId: 'twinflame/profiles/portrait_marcus_park',
   },
   elena: {
-    url: '/src/assets/images/portrait_elena_bookshop_1794983128610.jpg',
+    url: '/images/portrait_elena_bookshop_1794983128610.jpg',
     publicId: 'twinflame/profiles/portrait_elena_bookshop',
   },
   arjun: {
-    url: '/src/assets/images/portrait_arjun_rooftop_1794983129568.jpg',
+    url: '/images/portrait_arjun_rooftop_1794983129568.jpg',
     publicId: 'twinflame/profiles/portrait_arjun_rooftop',
   },
   sofia: {
-    url: '/src/assets/images/portrait_sofia_gallery_1794983133963.jpg',
+    url: '/images/portrait_sofia_gallery_1794983133963.jpg',
     publicId: 'twinflame/profiles/portrait_sofia_gallery',
   },
   noah: {
-    url: '/src/assets/images/portrait_noah_coastal_1794983130590.jpg',
+    url: '/images/portrait_noah_coastal_1794983130590.jpg',
     publicId: 'twinflame/profiles/portrait_noah_coastal',
   },
 };

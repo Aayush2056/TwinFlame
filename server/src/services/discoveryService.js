@@ -63,14 +63,19 @@ function writeLocalDb(state) {
 
 export async function ensureSeedProfiles() {
   if (getIsMongoConnected()) {
-    const count = await ProfileModel.countDocuments();
-    if (count === 0) {
-      await ProfileModel.insertMany(
-        SEED_PROFILES.map(({ id: _id, ...rest }) => rest),
-        { ordered: false }
-      );
-      console.info(`[Seed] Inserted ${SEED_PROFILES.length} profiles into MongoDB.`);
-    }
+    await ProfileModel.bulkWrite(
+      SEED_PROFILES.map(({ id, ...profile }) => ({
+        updateOne: {
+          filter: { slug: profile.slug },
+          update: {
+            $set: profile,
+          },
+          upsert: true,
+        },
+      }))
+    );
+
+    console.info(`[Seed] Synced ${SEED_PROFILES.length} profiles with MongoDB.`);
     return;
   }
 
