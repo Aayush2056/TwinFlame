@@ -1,7 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import { getIsMongoConnected } from '../config/db.js';
-import { getCache, invalidateCachePrefix, setCache } from '../config/redis.js';
+import {
+  getCache,
+  invalidateCachePrefix,
+  setCache,
+} from '../config/redis.js';
 import { MatchModel } from '../models/Match.js';
 import { ProfileModel } from '../models/Profile.js';
 import { SwipeModel } from '../models/Swipe.js';
@@ -11,6 +15,7 @@ import { toPublicProfile } from '../utils/profileMapper.js';
 
 const LOCAL_DATA_DIR = path.resolve(import.meta.dirname, '..', '..', 'data');
 const LOCAL_DATA_FILE = path.join(LOCAL_DATA_DIR, 'twinflame-db.json');
+
 const FEED_CACHE_TTL_SECONDS = 120;
 const MATCHES_CACHE_TTL_SECONDS = 120;
 
@@ -25,6 +30,7 @@ function readLocalDb() {
       swipes: [],
       matches: [],
     };
+
     writeLocalDb(initial);
     return initial;
   }
@@ -32,10 +38,15 @@ function readLocalDb() {
   try {
     const raw = fs.readFileSync(LOCAL_DATA_FILE, 'utf-8');
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed.profiles) || parsed.profiles.length < SEED_PROFILES.length) {
+
+    if (
+      !Array.isArray(parsed.profiles) ||
+      parsed.profiles.length < SEED_PROFILES.length
+    ) {
       parsed.profiles = SEED_PROFILES;
       writeLocalDb(parsed);
     }
+
     return {
       profiles: parsed.profiles,
       swipes: Array.isArray(parsed.swipes) ? parsed.swipes : [],
@@ -47,6 +58,7 @@ function readLocalDb() {
       swipes: [],
       matches: [],
     };
+
     writeLocalDb(reset);
     return reset;
   }
@@ -56,8 +68,15 @@ function writeLocalDb(state) {
   if (!fs.existsSync(LOCAL_DATA_DIR)) {
     fs.mkdirSync(LOCAL_DATA_DIR, { recursive: true });
   }
+
   const tempPath = `${LOCAL_DATA_FILE}.tmp`;
-  fs.writeFileSync(tempPath, JSON.stringify(state, null, 2), 'utf-8');
+
+  fs.writeFileSync(
+    tempPath,
+    JSON.stringify(state, null, 2),
+    'utf-8'
+  );
+
   fs.renameSync(tempPath, LOCAL_DATA_FILE);
 }
 
@@ -75,7 +94,10 @@ export async function ensureSeedProfiles() {
       }))
     );
 
-    console.info(`[Seed] Synced ${SEED_PROFILES.length} profiles with MongoDB.`);
+    console.info(
+      `[Seed] Synced ${SEED_PROFILES.length} profiles with MongoDB.`
+    );
+
     return;
   }
 
@@ -86,6 +108,7 @@ export async function getFeed({ userId, page, limit }) {
   const cacheKey = `feed:${userId}:p:${page}:l:${limit}`;
 
   const cached = await getCache(cacheKey);
+
   if (cached) {
     return cached;
   }
@@ -94,18 +117,26 @@ export async function getFeed({ userId, page, limit }) {
 
   if (getIsMongoConnected()) {
     const [swipes, totalMatches, totalCatalog] = await Promise.all([
-      SwipeModel.find({ actorId: userId }).select('targetProfileId').lean(),
+      SwipeModel.find({ actorId: userId })
+        .select('targetProfileId')
+        .lean(),
+
       MatchModel.countDocuments({ userId }),
+
       ProfileModel.countDocuments({ isActive: true }),
     ]);
 
     const swipedIds = swipes.map((s) => s.targetProfileId);
+
     const filter = {
       isActive: true,
-      ...(swipedIds.length > 0 ? { _id: { $nin: swipedIds } } : {}),
+      ...(swipedIds.length > 0
+        ? { _id: { $nin: swipedIds } }
+        : {}),
     };
 
     const totalRemaining = await ProfileModel.countDocuments(filter);
+
     const docs = await ProfileModel.find(filter)
       .sort({ _id: 1 })
       .skip((page - 1) * limit)
@@ -114,12 +145,14 @@ export async function getFeed({ userId, page, limit }) {
 
     response = {
       profiles: docs.map((doc) => toPublicProfile(doc)),
+
       pagination: {
         page,
         limit,
         totalRemaining,
         hasMore: page * limit < totalRemaining,
       },
+
       stats: {
         totalSwiped: swipedIds.length,
         totalMatches,
@@ -128,22 +161,41 @@ export async function getFeed({ userId, page, limit }) {
     };
   } else {
     const db = readLocalDb();
-    const userSwipes = db.swipes.filter((s) => s.actorId === userId);
-    const swipedSet = new Set(userSwipes.map((s) => s.targetProfileId));
-    const activeCatalog = db.profiles.filter((p) => p.isActive);
-    const remaining = activeCatalog.filter((p) => !swipedSet.has(p.id));
+
+    const userSwipes = db.swipes.filter(
+      (s) => s.actorId === userId
+    );
+
+    const swipedSet = new Set(
+      userSwipes.map((s) => s.targetProfileId)
+    );
+
+    const activeCatalog = db.profiles.filter(
+      (p) => p.isActive
+    );
+
+    const remaining = activeCatalog.filter(
+      (p) => !swipedSet.has(p.id)
+    );
+
     const start = (page - 1) * limit;
+
     const paged = remaining.slice(start, start + limit);
-    const userMatches = db.matches.filter((m) => m.userId === userId);
+
+    const userMatches = db.matches.filter(
+      (m) => m.userId === userId
+    );
 
     response = {
       profiles: paged.map((p) => toPublicProfile(p)),
+
       pagination: {
         page,
         limit,
         totalRemaining: remaining.length,
         hasMore: start + limit < remaining.length,
       },
+
       stats: {
         totalSwiped: userSwipes.length,
         totalMatches: userMatches.length,
@@ -153,17 +205,25 @@ export async function getFeed({ userId, page, limit }) {
   }
 
   await setCache(cacheKey, response, FEED_CACHE_TTL_SECONDS);
+
   return response;
 }
 
 export async function recordSwipe({ userId, profileId, action }) {
   if (getIsMongoConnected()) {
-    const target = await ProfileModel.findOne({ _id: profileId, isActive: true })
+    const target = await ProfileModel.findOne({
+      _id: profileId,
+      isActive: true,
+    })
       .select('+hasLikedCurrentUser')
       .lean();
 
     if (!target) {
-      throw new HttpError(404, 'Profile not found or inactive.', 'PROFILE_NOT_FOUND');
+      throw new HttpError(
+        404,
+        'Profile not found or inactive.',
+        'PROFILE_NOT_FOUND'
+      );
     }
 
     const existingSwipe = await SwipeModel.findOne({
@@ -172,7 +232,11 @@ export async function recordSwipe({ userId, profileId, action }) {
     }).lean();
 
     if (existingSwipe) {
-      throw new HttpError(409, 'You have already swiped on this profile.', 'DUPLICATE_SWIPE');
+      throw new HttpError(
+        409,
+        'You have already swiped on this profile.',
+        'DUPLICATE_SWIPE'
+      );
     }
 
     const createdSwipe = await SwipeModel.create({
@@ -181,7 +245,10 @@ export async function recordSwipe({ userId, profileId, action }) {
       action,
     });
 
-    const isMutual = action === 'like' && Boolean(target.hasLikedCurrentUser);
+    const isMutual =
+      action === 'like' &&
+      Boolean(target.hasLikedCurrentUser);
+
     let matchDto = null;
 
     if (isMutual) {
@@ -216,25 +283,42 @@ export async function recordSwipe({ userId, profileId, action }) {
         action,
         createdAt: createdSwipe.createdAt.toISOString(),
       },
+
       isMatch: isMutual,
       match: matchDto,
     };
   }
 
   const db = readLocalDb();
-  const target = db.profiles.find((p) => p.id === profileId && p.isActive);
+
+  const target = db.profiles.find(
+    (p) => p.id === profileId && p.isActive
+  );
+
   if (!target) {
-    throw new HttpError(404, 'Profile not found or inactive.', 'PROFILE_NOT_FOUND');
+    throw new HttpError(
+      404,
+      'Profile not found or inactive.',
+      'PROFILE_NOT_FOUND'
+    );
   }
 
   const duplicate = db.swipes.find(
-    (s) => s.actorId === userId && s.targetProfileId === profileId
+    (s) =>
+      s.actorId === userId &&
+      s.targetProfileId === profileId
   );
+
   if (duplicate) {
-    throw new HttpError(409, 'You have already swiped on this profile.', 'DUPLICATE_SWIPE');
+    throw new HttpError(
+      409,
+      'You have already swiped on this profile.',
+      'DUPLICATE_SWIPE'
+    );
   }
 
   const now = new Date().toISOString();
+
   const newSwipe = {
     id: `swp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     actorId: userId,
@@ -242,15 +326,22 @@ export async function recordSwipe({ userId, profileId, action }) {
     action,
     createdAt: now,
   };
+
   db.swipes.push(newSwipe);
 
-  const isMutual = action === 'like' && Boolean(target.hasLikedCurrentUser);
+  const isMutual =
+    action === 'like' &&
+    Boolean(target.hasLikedCurrentUser);
+
   let matchDto = null;
 
   if (isMutual) {
     let existingMatch = db.matches.find(
-      (m) => m.userId === userId && m.matchedProfileId === profileId
+      (m) =>
+        m.userId === userId &&
+        m.matchedProfileId === profileId
     );
+
     if (!existingMatch) {
       existingMatch = {
         id: `mth_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -258,8 +349,10 @@ export async function recordSwipe({ userId, profileId, action }) {
         matchedProfileId: profileId,
         matchedAt: now,
       };
+
       db.matches.push(existingMatch);
     }
+
     matchDto = {
       id: existingMatch.id,
       matchedAt: existingMatch.matchedAt,
@@ -280,6 +373,7 @@ export async function recordSwipe({ userId, profileId, action }) {
       action,
       createdAt: now,
     },
+
     isMatch: isMutual,
     match: matchDto,
   };
@@ -287,7 +381,9 @@ export async function recordSwipe({ userId, profileId, action }) {
 
 export async function getMatches(userId) {
   const cacheKey = `matches:${userId}`;
+
   const cached = await getCache(cacheKey);
+
   if (cached) {
     return cached;
   }
@@ -295,19 +391,35 @@ export async function getMatches(userId) {
   let matches = [];
 
   if (getIsMongoConnected()) {
-    const docs = await MatchModel.find({ userId }).sort({ matchedAt: -1 }).lean();
-    const profileIds = docs.map((d) => d.matchedProfileId);
+    const docs = await MatchModel.find({ userId })
+      .sort({ matchedAt: -1 })
+      .lean();
+
+    const profileIds = docs.map(
+      (d) => d.matchedProfileId
+    );
+
     const profiles = await ProfileModel.find({
       _id: { $in: profileIds },
       isActive: true,
     }).lean();
 
-    const profileMap = new Map(profiles.map((p) => [String(p._id), toPublicProfile(p)]));
+    const profileMap = new Map(
+      profiles.map((p) => [
+        String(p._id),
+        toPublicProfile(p),
+      ])
+    );
 
     matches = docs
       .map((doc) => {
-        const profile = profileMap.get(doc.matchedProfileId);
+        // ObjectId ko String mein convert karke lookup
+        const profile = profileMap.get(
+          String(doc.matchedProfileId)
+        );
+
         if (!profile) return null;
+
         return {
           id: String(doc._id),
           matchedAt: new Date(doc.matchedAt).toISOString(),
@@ -317,16 +429,30 @@ export async function getMatches(userId) {
       .filter((item) => item !== null);
   } else {
     const db = readLocalDb();
+
     const profileMap = new Map(
-      db.profiles.filter((p) => p.isActive).map((p) => [p.id, toPublicProfile(p)])
+      db.profiles
+        .filter((p) => p.isActive)
+        .map((p) => [
+          p.id,
+          toPublicProfile(p),
+        ])
     );
 
     matches = db.matches
       .filter((m) => m.userId === userId)
-      .sort((a, b) => new Date(b.matchedAt).getTime() - new Date(a.matchedAt).getTime())
+      .sort(
+        (a, b) =>
+          new Date(b.matchedAt).getTime() -
+          new Date(a.matchedAt).getTime()
+      )
       .map((m) => {
-        const profile = profileMap.get(m.matchedProfileId);
+        const profile = profileMap.get(
+          m.matchedProfileId
+        );
+
         if (!profile) return null;
+
         return {
           id: m.id,
           matchedAt: m.matchedAt,
@@ -336,8 +462,17 @@ export async function getMatches(userId) {
       .filter((item) => item !== null);
   }
 
-  const result = { matches, total: matches.length };
-  await setCache(cacheKey, result, MATCHES_CACHE_TTL_SECONDS);
+  const result = {
+    matches,
+    total: matches.length,
+  };
+
+  await setCache(
+    cacheKey,
+    result,
+    MATCHES_CACHE_TTL_SECONDS
+  );
+
   return result;
 }
 
@@ -349,8 +484,15 @@ export async function resetUserDiscovery(userId) {
     ]);
   } else {
     const db = readLocalDb();
-    db.swipes = db.swipes.filter((s) => s.actorId !== userId);
-    db.matches = db.matches.filter((m) => m.userId !== userId);
+
+    db.swipes = db.swipes.filter(
+      (s) => s.actorId !== userId
+    );
+
+    db.matches = db.matches.filter(
+      (m) => m.userId !== userId
+    );
+
     writeLocalDb(db);
   }
 
